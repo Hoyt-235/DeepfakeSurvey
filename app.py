@@ -307,63 +307,66 @@ def show_image():
 
 
 def get_response():
-    idx = st.session_state.trial_index
-    row = st.session_state.metadata.iloc[idx]
+    box = st.container()
+    with box:
+        idx = st.session_state.trial_index
+        row = st.session_state.metadata.iloc[idx]
 
-    st.markdown(f"## Image {idx+1} of {NUM_TRIALS}")
-    st.write("")  # breathing room
+        st.markdown(f"## Image {idx+1} of {NUM_TRIALS}")
+        st.write("")  # breathing room
 
-    # 1) Render the radio *outside* the form
-    options = ["","🟢 Real", "🔴 Fake"]
+        # 1) Render the radio *outside* the form
+        options = ["","🟢 Real", "🔴 Fake"]
 
-    choice = st.radio(
-        "Your Answer",
-        options,
-        index=0,                # no default
-        key=f"radio_{idx}",
-        horizontal=True,
-    )
-
-    # only enable once they pick one of the real options
-    can_submit = choice in options[1:]
-
-    with st.form(key=f"resp_form_{idx}", clear_on_submit=True, border=False):
-        submitted = st.form_submit_button(
-            "Submit",
-            use_container_width=True,
-            disabled=not can_submit
+        choice = st.radio(
+            "Your Answer",
+            options,
+            index=0,                # no default
+            key=f"radio_{idx}",
+            horizontal=True,
         )
-        if not can_submit:
-            st.caption("Please select Real or Fake to continue.")
 
-        if submitted:
-            # write to DB
-            with engine.begin() as conn:
-                conn.execute(text("""
-                    INSERT INTO public.responses (user_id,image_id,response,timestamp)
-                    VALUES(:uid,:iid,:resp,:ts)
-                    ON CONFLICT DO NOTHING
-                """), {
-                    "uid": user_id,
-                    "iid": int(row["image_id"]),
-                    "resp": choice,
-                    "ts": datetime.now(timezone.utc),
+        # only enable once they pick one of the real options
+        can_submit = choice in options[1:]
+
+        with st.form(key=f"resp_form_{idx}", clear_on_submit=True, border=False):
+            submitted = st.form_submit_button(
+                "Submit",
+                use_container_width=True,
+                disabled=not can_submit
+            )
+            if not can_submit:
+                st.caption("Please select Real or Fake to continue.")
+
+            if submitted:
+                box.emtpy() # remove the form
+                # write to DB
+                with engine.begin() as conn:
+                    conn.execute(text("""
+                        INSERT INTO public.responses (user_id,image_id,response,timestamp)
+                        VALUES(:uid,:iid,:resp,:ts)
+                        ON CONFLICT DO NOTHING
+                    """), {
+                        "uid": user_id,
+                        "iid": int(row["image_id"]),
+                        "resp": choice,
+                        "ts": datetime.now(timezone.utc),
+                    })
+
+                # record & advance
+                st.session_state.responses.append({
+                    "gt": row["label"],
+                    "resp": choice
                 })
+                if idx + 1 < NUM_TRIALS:
+                    st.session_state.trial_index += 1
+                    st.session_state.phase = "show_image"
+                else:
+                    st.session_state.phase = "finished"
 
-            # record & advance
-            st.session_state.responses.append({
-                "gt": row["label"],
-                "resp": choice
-            })
-            if idx + 1 < NUM_TRIALS:
-                st.session_state.trial_index += 1
-                st.session_state.phase = "show_image"
-            else:
-                st.session_state.phase = "finished"
-
-            # reset for next round
-            st.session_state.ready_for_response = False
-            st.rerun()
+                # reset for next round
+                st.session_state.ready_for_response = False
+                st.rerun()
 
 
 
