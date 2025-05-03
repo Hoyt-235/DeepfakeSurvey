@@ -339,7 +339,7 @@ def get_response():
                 st.caption("Please select Real or Fake to continue.")
 
             if submitted:
-                box.emtpy() # remove the form
+                box.empty() # remove the form
                 # write to DB
                 with engine.begin() as conn:
                     conn.execute(text("""
