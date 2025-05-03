@@ -1,4 +1,5 @@
 Images/
 reformat_metadata.py
 .streamlit/
+secrets.toml
 .devcontainer/
