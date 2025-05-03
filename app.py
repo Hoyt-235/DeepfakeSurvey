@@ -149,9 +149,26 @@ if 'ready_for_response' not in st.session_state:
 
 # ─── PREFETCH ALL 30 IMAGE BYTES ────────────────────────────────────────────────
 @st.cache_data(ttl=3600, show_spinner=False)
-def prefetch_images(urls: tuple[str, ...]) -> dict[str, bytes]:
-    import requests
-    return {u: requests.get(u).content for u in urls}
+def prefetch_images(urls: tuple[str, ...], 
+                    max_retries: int = 3, 
+                    backoff_factor: float = 0.5) -> dict[str, bytes]:
+    """
+    Download each URL with retry logic and exponential back-off.
+    If a URL still fails after max_retries, it will simply be skipped.
+    """
+    images = {}
+    for url in urls:
+        for attempt in range(1, max_retries + 1):
+            try:
+                resp = requests.get(url, timeout=5)
+                resp.raise_for_status()
+                images[url] = resp.content
+                break
+            except Exception:
+                wait = backoff_factor * (2 ** (attempt - 1))
+                time.sleep(wait)
+        # if all attempts failed, just move on to the next URL
+    return images
 
 # ─── SAMPLING ───────────────────────────────────────────────────────────────────
 def sample_metadata(user_id: str, full_metadata: pd.DataFrame):
