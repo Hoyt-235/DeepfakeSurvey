@@ -239,8 +239,8 @@ def show_instructions():
     with box:
         st.title("Deepfake Detection Test")
         st.write( f"""
-            This test is designed to measure how well you can tell apart real and manipulated images of human faces. You will be shown {NUM_TRIALS} images, one at a time,
-            for {DISPLAY_TIME} seconds each. After the image disappears, you’ll be asked whether you believe the image to be Real or Fake. You may take as long as you like to answer.
+            This test is designed to measure how well people can tell real and fake human faces apart. You will be shown {NUM_TRIALS} images, one at a time,
+            for {DISPLAY_TIME} seconds each. After the image disappears, you’ll be asked to answer whether you believe the image was real or fake. You may take as long as you need to answer.
             The results of this test will be used for research purposes only. When you’re ready, click **Begin Test**.
             """)
         # -- once, generate your metadata and image‐bytes in the background --
@@ -349,14 +349,14 @@ def get_response():
                     """), {
                         "uid": user_id,
                         "iid": int(row["image_id"]),
-                        "resp": choice,
+                        "resp": choice[-4:].lower(),
                         "ts": datetime.now(timezone.utc),
                     })
 
                 # record & advance
                 st.session_state.responses.append({
                     "gt": row["label"],
-                    "resp": choice
+                    "resp": choice[-4:].lower()
                 })
                 if idx + 1 < NUM_TRIALS:
                     st.session_state.trial_index += 1
