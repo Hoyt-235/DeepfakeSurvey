@@ -421,8 +421,8 @@ def show_finished():
     total   = len(st.session_state.responses)
     correct = sum(
         1 for r in st.session_state.responses
-        if (r["gt"] and r["resp"] == "Real") or
-           (not r["gt"] and r["resp"] == "Fake")
+        if (r["gt"] and r["resp"] == "real") or
+           (not r["gt"] and r["resp"] == "fake")
     )
     
     st.header("✅ Test Complete!")
