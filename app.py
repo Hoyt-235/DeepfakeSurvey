@@ -24,108 +24,35 @@ cookies = CookieManager(
 
 # ─── at the very top of your script, after imports ─────────────────────────────
 # Make fonts & buttons a bit larger and center everything
-st.markdown("""
-<style>
-  /* ─── Layout & Base ───────────────────────────────────────────────────── */
-  .stApp {
-    max-width: 800px;
-    margin: auto;
-    padding: 2rem 1rem;
-    background-color: #F7F7F7 !important;  /* Light neutral bg */
-    color: #000000 !important;
-    font-family: 'Segoe UI', Roboto, sans-serif;
-  }
+st.markdown(
+    """
+    <style>
+      /* Center the main app column and cap max-width */
+      .stApp {
+        max-width: 800px !important;
+        margin: auto !important;
+        padding: 2rem 1rem !important;
+      }
 
-  html {
-    font-size: calc(17px + 0.3vw);
-    line-height: 1.6;
-    color: #000000 !important;
-  }
+      /* Tweak forms and images */
+      form[role="form"],
+      .stImage > div {
+        background: var(--secondaryBackgroundColor) !important;
+        border-radius: 12px !important;
+        box-shadow: 0 2px 5px rgba(0,0,0,0.1) !important;
+      }
 
-  /* ─── Headings ────────────────────────────────────────────────────────── */
-  h1, h2, h3, h4 {
-    color: #222222;
-    font-weight: 700;
-    margin-bottom: 0.5em;
-  }
+      /* Hide the “placeholder” radio option label + its button */
+      /* This hides the FIRST radio button inside every st.radio */
+      .stRadio > div > label:nth-of-type(1),
+      .stRadio > div > label:nth-of-type(1) ~ span[role="radio"] {
+        display: none !important;
+      }
+    </style>
+    """,
+    unsafe_allow_html=True,
+)
 
-  /* ─── Images ─────────────────────────────────────────────────────────── */
-  .stImage > div {
-    background-color: #FFFFFF;
-    border: 2px solid #E0E0E0;
-    border-radius: 12px;
-    padding: 0.5rem;
-  }
-
-  /* ─── Form Container ─────────────────────────────────────────────────── */
-  form[role="form"] {
-    background-color: #FFFFFF !important;
-    color: #000000 !important;
-    padding: 1rem !important;
-    border-radius: 12px !important;
-    box-shadow: 0 2px 5px rgba(0,0,0,0.1) !important;
-  }
-
-  /* ─── Form Submit Button ─────────────────────────────────────────────── */
-  .stButton > button,
-  button[data-testid="stFormSubmitButton"] {
-    background-color: #0072B2 !important;
-    color: #FFFFFF !important;
-    font-size: 1.2rem !important;
-    padding: 0.75rem 1.5rem !important;
-    border-radius: 8px !important;
-    border: none !important;
-    width: 100%;
-  }
-
-  .stButton > button:hover,
-  button[data-testid="stFormSubmitButton"]:hover {
-    background-color: #005A9C !important;
-  }
-
-  /* ─── Radio Buttons ──────────────────────────────────────────────────── */
-  .stRadio > div {
-    flex-direction: row !important;
-    gap: 2rem;
-    justify-content: center;
-    align-items: center;
-  }
-
-  .stRadio label,
-  div[data-baseweb="radio"] label {
-    color: #000000 !important;
-    font-weight: 600 !important;
-    font-size: 1.1rem;
-  }
-
-  div[data-baseweb="radio"] > div > span[role="radio"] {
-    border: 2px solid #0072B2 !important;
-    width: 20px !important;
-    height: 20px !important;
-  }
-            
-  /* Hide that first (placeholder) radio option completely */
-  /* This targets the very first label/input under every st.radio widget */
-  .stRadio > div > label:nth-child(1),
-  .stRadio > div > div:nth-child(1) [role="radio"] {
-    display: none !important;
-
-  /* ─── Button text in Streamlit-generated forms ──────────────────────── */
-  .stButton button span {
-    font-size: 1.2rem !important;
-    color: #FFFFFF !important;
-    font-weight: 600;
-  }
-
-  /* ─── Small captions (e.g., “Time left”) ────────────────────────────── */
-  .stCaption, .css-1j3b502 {
-    color: #444444 !important;
-    font-size: 0.95rem !important;
-  }
-</style>
-
-
-""", unsafe_allow_html=True)
 
 
 
