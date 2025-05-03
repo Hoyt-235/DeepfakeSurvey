@@ -1,0 +1,11 @@
+dlib==19.24.6
+numpy==2.2.5
+opencv_python==4.11.0.86
+opencv_python_headless==4.11.0.86
+pandas==2.2.3
+Requests==2.32.3
+SQLAlchemy==2.0.40
+streamlit==1.44.1
+streamlit_cookies_manager==0.2.0
+supabase==2.15.1
+tqdm==4.67.1
