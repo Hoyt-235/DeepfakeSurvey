@@ -147,27 +147,60 @@ if 'ready_for_response' not in st.session_state:
     st.session_state.ready_for_response = False
 
 
-# ─── PREFETCH ALL 30 IMAGE BYTES ────────────────────────────────────────────────
+# ─── PREFETCH ALL 30 IMAGE BYTES (FROM 45 IMAGE POOL WHICH INCLUDES BACKUPS ────────────────────────────────────────────────
 @st.cache_data(ttl=3600, show_spinner=False)
-def prefetch_images(urls: tuple[str, ...], 
-                    max_retries: int = 3, 
-                    backoff_factor: float = 0.5) -> dict[str, bytes]:
+def prefetch_images(
+    primary_urls: tuple[str, ...],
+    backup_urls:  tuple[str, ...],
+    target_count: int = NUM_TRIALS,
+    max_retries:  int   = 3,
+    backoff_factor: float = 0.5,
+) -> dict[str, bytes]:
     """
-    Download each URL with retry logic and exponential back-off.
-    If a URL still fails after max_retries, it will simply be skipped.
+    Fetch up to `target_count` images, first trying each URL in `primary_urls`.
+    If any primary fails after max_retries, pull from backup_urls (in order)
+    until we reach `target_count` successes or exhaust backups.
+
+    Returns a dict {url: content} of length <= target_count.
     """
-    images = {}
-    for url in urls:
+    import requests, time
+
+    def try_fetch(url):
         for attempt in range(1, max_retries + 1):
             try:
-                resp = requests.get(url, timeout=5)
-                resp.raise_for_status()
-                images[url] = resp.content
-                break
+                r = requests.get(url, timeout=5)
+                r.raise_for_status()
+                return r.content
             except Exception:
                 wait = backoff_factor * (2 ** (attempt - 1))
                 time.sleep(wait)
-        # if all attempts failed, just move on to the next URL
+        return None
+
+    images = {}
+    used_backups = set()  # to avoid retrying the same backup twice
+
+    # 1) Attempt primaries
+    for url in primary_urls:
+        if len(images) >= target_count:
+            break
+        content = try_fetch(url)
+        if content is not None:
+            images[url] = content
+
+    # 2) Fill from backups if needed
+    backup_iter = iter(backup_urls)
+    while len(images) < target_count:
+        try:
+            b = next(backup_iter)
+        except StopIteration:
+            break  # no more backups
+        if b in used_backups:
+            continue
+        used_backups.add(b)
+        content = try_fetch(b)
+        if content is not None:
+            images[b] = content
+
     return images
 
 # ─── SAMPLING ───────────────────────────────────────────────────────────────────
@@ -182,6 +215,8 @@ def sample_metadata(user_id: str, full_metadata: pd.DataFrame):
     Filters out images the user has already seen (if possible),
     and falls back to replacement sampling if a bucket runs dry.
     """
+     # how many primary vs backup
+    PRIMARY, BACKUP = NUM_TRIALS, 15
     # 1) Which images has the user already labeled?
     with engine.connect() as conn:
         seen = {
@@ -194,7 +229,18 @@ def sample_metadata(user_id: str, full_metadata: pd.DataFrame):
 
     # 2) Unseen pool (or full if < NUM_TRIALS remaining)
     unseen = full_metadata.loc[~full_metadata["image_id"].isin(seen)]
-    pool   = unseen if len(unseen) >= NUM_TRIALS else full_metadata.copy()
+    pool   = unseen if len(unseen) >= PRIMARY else full_metadata.copy()
+
+     # 3) Sample primary exactly PRIMARY using your bucket logic
+    def sample_bucket(df_pool, filt, cnt):
+        df = df_pool
+        df = df[df["dataset"] == filt["dataset"]]
+        df = df[df["label"]   == filt["label"]]
+        if filt["method"] is None:
+            df = df[df["method"].isnull()]
+        else:
+            df = df[df["method"] == filt["method"]]
+        return df.sample(n=cnt, replace=(len(df) < cnt))
 
     # 3) Define buckets → (filter criteria, count)
     buckets = [
@@ -217,27 +263,26 @@ def sample_metadata(user_id: str, full_metadata: pd.DataFrame):
         ({"dataset":"DFDC_FAKE","label":"fake","method":"DFDC"}, 2),
     ]
 
-    sampled_frames = []
+    primary_samples = []
     for filt, cnt in buckets:
-        df = pool
-        df = df[df["dataset"] == filt["dataset"]]
-        df = df[df["label"]   == filt["label"]]
-        if filt["method"] is None:
-            # pick rows where method is missing
-            df = df[df["method"].isnull()]
-        else:
-            df = df[df["method"] == filt["method"]]
+        primary_samples.append(sample_bucket(pool, filt, cnt))
+    prim_df = pd.concat(primary_samples, axis=0)
+    # if we've inadvertently drawn more or fewer than PRIMARY, resample/shrink
+    if len(prim_df) > PRIMARY:
+        prim_df = prim_df.sample(n=PRIMARY, replace=False)
+    elif len(prim_df) < PRIMARY:
+        extra = pool.drop(prim_df.index).sample(n=PRIMARY-len(prim_df), replace=True)
+        prim_df = pd.concat([prim_df, extra], axis=0)
 
-        # sample with or without replacement
-        if len(df) >= cnt:
-            draw = df.sample(n=cnt, replace=False)
-        else:
-            draw = df.sample(n=cnt, replace=True)
+    # 4) Build backup pool *excluding* the primary picks
+    remaining = full_metadata.drop(prim_df.index)
+    if len(remaining) < BACKUP:
+        # if too small, fall back to full metadata
+        remaining = full_metadata.copy()
+    back_df = remaining.sample(n=BACKUP, replace=(len(remaining) < BACKUP))
 
-        sampled_frames.append(draw)
-
-    # 4) concatenate & shuffle
-    sampled = pd.concat(sampled_frames, axis=0).sample(frac=1).reset_index(drop=True)
+    # 5) concatenate: prim first, then backup
+    sampled = pd.concat([prim_df, back_df], axis=0).reset_index(drop=True)
     return sampled
 
 
@@ -273,10 +318,13 @@ def show_instructions():
                 BASE = "https://rpkeffblqusmqojobkjq.supabase.co/storage/v1/object/public/deepfakesurvey"
                 urls = tuple(f"{BASE}/{fn}"
                             for fn in st.session_state.metadata["filename"])
-                st.session_state.image_urls  = urls
+                
+                primary_urls = urls[:NUM_TRIALS]
+                backup_urls  = urls[NUM_TRIALS:]
 
-                # 3) Prefetch images inside the *same* spinner
-                st.session_state.image_bytes = prefetch_images(urls)
+                # prefetch images (use backup if any one fails):
+                st.session_state.image_bytes = prefetch_images(primary_urls, backup_urls)
+                st.session_state.image_urls  = list(st.session_state.image_bytes.keys())[:NUM_TRIALS]
 
             # A tiny delay so the spinner actually shows up
             time.sleep(0.1)
